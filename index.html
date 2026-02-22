@@ -1,29 +1,31 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>2026 課堂查詢工具</title>
-    <!-- 使用 CDN 載入 React 與 Tailwind -->
+    <title>2026 課堂查詢 (自適應版)</title>
+    <!-- 使用 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 載入 React & Babel -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- 載入 Lucide 圖標庫 -->
-    <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
-        body { font-family: 'Noto Sans TC', sans-serif; }
-        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        body { font-family: 'Noto Sans TC', sans-serif; background-color: #f9fafb; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #cbd5e1; }
     </style>
 </head>
-<body class="bg-gray-50">
+<body>
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState } = React;
+        const { useState, useEffect } = React;
 
-        // 2026年 國定假日與補假清單
+        // 2026年 國定假日清單
         const HOLIDAYS_2026 = [
             "2026-01-01",
             "2026-02-14", "2026-02-15", "2026-02-16", "2026-02-17", "2026-02-18", "2026-02-19", "2026-02-20", "2026-02-21", "2026-02-22",
@@ -41,37 +43,55 @@
             return `${y}-${m}-${d}`;
         };
 
-        function App() {
+        // 簡單的圖標組件 (代替 Lucide)
+        const Icon = ({ name }) => {
+            const icons = {
+                calendar: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
+                plus: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>,
+                trash: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-4v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>,
+                search: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>,
+                check: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+                list: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+            };
+            return icons[name] || null;
+        };
+
+        const App = () => {
             const [startMonth, setStartMonth] = useState(2);
-            const [endMonth, setEndMonth] = useState(4);
+            const [endMonth, setEndMonth] = useState(6);
             const [totalClasses, setTotalClasses] = useState(18);
             const [selectedDays, setSelectedDays] = useState([3, 5]);
             const [adjustments, setAdjustments] = useState([]);
             const [newDate, setNewDate] = useState('');
             const [newType, setNewType] = useState('exclude');
+            
             const [results, setResults] = useState(null);
 
             const handleCalculate = () => {
                 const dates = [];
                 const holidaySet = new Set(HOLIDAYS_2026);
                 let current = new Date(2026, startMonth - 1, 1);
-                const endLimit = new Date(2026, endMonth, 0);
+                const endLimit = new Date(2026, endMonth, 0); // 結束月份的最後一天
 
+                // 核心邏輯：在時間限制內找滿總堂數
                 while (dates.length < totalClasses && current <= endLimit) {
                     const dateStr = formatDate(current);
                     const dayOfWeek = current.getDay();
+
                     const manualAdj = adjustments.find(a => a.date === dateStr);
                     
                     if (manualAdj) {
                         if (manualAdj.type === 'include') {
                             dates.push({ date: dateStr, type: 'manual', note: '手動加課' });
                         }
+                        // 如果是 exclude，則直接跳過不加入 dates
                     } else if (selectedDays.includes(dayOfWeek) && !holidaySet.has(dateStr)) {
                         dates.push({ date: dateStr, type: 'regular', note: '' });
                     }
                     current.setDate(current.getDate() + 1);
                 }
 
+                // 統計每月堂數
                 const stats = {};
                 dates.forEach(d => {
                     const month = parseInt(d.date.split('-')[1], 10);
@@ -82,44 +102,60 @@
             };
 
             return (
-                <div className="min-h-screen p-4 sm:p-8">
-                    <div className="max-w-5xl mx-auto">
-                        <header className="mb-8 border-b pb-6 flex flex-col md:flex-row justify-between items-center gap-4">
-                            <h1 className="text-3xl font-bold text-indigo-700">2026 課堂查詢</h1>
-                            <div className="text-xs font-bold text-gray-400 bg-white px-3 py-1 rounded-full border">
-                                已同步 2026 年度行政院例假日
+                <div className="min-h-screen p-4 sm:p-6 lg:p-10">
+                    <div className="max-w-6xl mx-auto">
+                        
+                        {/* Header */}
+                        <header className="mb-10 flex flex-col md:flex-row md:items-end md:justify-between gap-4 border-b pb-6 border-gray-200">
+                            <div>
+                                <h1 className="text-4xl font-black text-indigo-800 tracking-tight">2026 課堂查詢</h1>
+                                <p className="text-gray-500 mt-2 font-medium">智慧排除國定假日，自動統計每月堂數</p>
+                            </div>
+                            <div className="flex items-center gap-2 text-xs font-bold text-emerald-600 bg-emerald-50 px-4 py-2 rounded-full border border-emerald-100">
+                                <Icon name="check" />
+                                2026 年度行事曆已同步
                             </div>
                         </header>
 
-                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                            
+                            {/* Settings (Left) */}
                             <div className="lg:col-span-4 space-y-6">
-                                <div className="bg-white p-6 rounded-2xl shadow-sm border">
-                                    <h3 className="font-bold mb-4 text-gray-600">課程設定</h3>
-                                    <div className="space-y-4">
-                                        <div className="grid grid-cols-2 gap-2">
-                                            <div className="space-y-1">
-                                                <label className="text-[10px] text-gray-400 font-bold uppercase">開始月份</label>
-                                                <select value={startMonth} onChange={e => setStartMonth(Number(e.target.value))} className="w-full p-2 border rounded-xl text-sm bg-gray-50">
-                                                    {Array.from({length:12}, (_,i)=><option key={i+1} value={i+1}>{i+1}月</option>)}
+                                <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6">
+                                    <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-gray-800">
+                                        <Icon name="calendar" /> 課程範圍設定
+                                    </h3>
+                                    
+                                    <div className="space-y-6">
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-2">
+                                                <label className="text-xs font-black text-gray-400 uppercase tracking-widest">開始月份</label>
+                                                <select value={startMonth} onChange={e => setStartMonth(Number(e.target.value))} className="w-full bg-gray-50 border-gray-200 rounded-2xl p-3 text-sm font-bold focus:ring-2 ring-indigo-500 outline-none cursor-pointer">
+                                                    {Array.from({length:12}, (_,i) => <option key={i+1} value={i+1}>{i+1} 月</option>)}
                                                 </select>
                                             </div>
-                                            <div className="space-y-1">
-                                                <label className="text-[10px] text-gray-400 font-bold uppercase">結束月份</label>
-                                                <select value={endMonth} onChange={e => setEndMonth(Number(e.target.value))} className="w-full p-2 border rounded-xl text-sm bg-gray-50">
-                                                    {Array.from({length:12}, (_,i)=><option key={i+1} value={i+1}>{i+1}月</option>)}
+                                            <div className="space-y-2">
+                                                <label className="text-xs font-black text-gray-400 uppercase tracking-widest">結束月份</label>
+                                                <select value={endMonth} onChange={e => setEndMonth(Number(e.target.value))} className="w-full bg-gray-50 border-gray-200 rounded-2xl p-3 text-sm font-bold focus:ring-2 ring-indigo-500 outline-none cursor-pointer">
+                                                    {Array.from({length:12}, (_,i) => <option key={i+1} value={i+1}>{i+1} 月</option>)}
                                                 </select>
                                             </div>
                                         </div>
-                                        <div className="space-y-1">
-                                            <label className="text-[10px] text-gray-400 font-bold uppercase">總堂數</label>
-                                            <input type="number" value={totalClasses} onChange={e => setTotalClasses(Number(e.target.value))} className="w-full p-2 border rounded-xl font-bold text-indigo-600 bg-gray-50" />
+
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest">總課堂數</label>
+                                            <input type="number" value={totalClasses} onChange={e => setTotalClasses(Number(e.target.value))} className="w-full bg-gray-50 border-gray-200 rounded-2xl p-3 text-2xl font-black text-indigo-600 focus:ring-2 ring-indigo-500 outline-none" />
                                         </div>
-                                        <div className="space-y-1">
-                                            <label className="text-[10px] text-gray-400 font-bold uppercase block mb-1">上課星期</label>
-                                            <div className="flex justify-between gap-1">
+
+                                        <div className="space-y-3">
+                                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest">上課星期</label>
+                                            <div className="flex justify-between">
                                                 {[1,2,3,4,5,6,0].map(d => (
-                                                    <button key={d} onClick={()=>setSelectedDays(prev=>prev.includes(d)?prev.filter(x=>x!==d):[...prev, d])}
-                                                        className={`w-9 h-9 rounded-lg text-xs font-bold transition-all ${selectedDays.includes(d)?'bg-indigo-600 text-white shadow-md':'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}>
+                                                    <button
+                                                        key={d}
+                                                        onClick={() => setSelectedDays(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d])}
+                                                        className={`w-10 h-10 rounded-2xl text-sm font-black transition-all ${selectedDays.includes(d) ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
+                                                    >
                                                         {WEEKDAY_NAMES[d]}
                                                     </button>
                                                 ))}
@@ -127,74 +163,105 @@
                                         </div>
                                     </div>
                                 </div>
-                                
-                                <div className="bg-white p-6 rounded-2xl shadow-sm border">
-                                    <h3 className="font-bold mb-4 text-gray-600">調課功能</h3>
-                                    <input type="date" value={newDate} onChange={e=>setNewDate(e.target.value)} className="w-full p-2 border rounded-xl mb-2 text-sm bg-gray-50 outline-none focus:ring-2 ring-indigo-500" />
-                                    <div className="flex gap-2">
-                                        <select value={newType} onChange={e=>setNewType(e.target.value)} className="flex-1 p-2 border rounded-xl text-sm bg-white">
-                                            <option value="exclude">停課排除</option>
-                                            <option value="include">加課補課</option>
-                                        </select>
-                                        <button onClick={()=>{if(newDate){setAdjustments([...adjustments,{date:newDate,type:newType}]);setNewDate('');}}} className="bg-indigo-600 text-white px-4 rounded-xl shadow-md hover:bg-indigo-700 active:scale-95 transition-all font-bold">+</button>
-                                    </div>
-                                    <div className="mt-4 flex flex-wrap gap-2">
-                                        {adjustments.map(a=>(
-                                            <div key={a.date} className="text-[10px] bg-gray-50 border px-2 py-1 rounded-full flex items-center gap-1 font-bold">
-                                                <span className={a.type==='exclude'?'text-red-500':'text-green-600'}>{a.type==='exclude'?'停':'加'}</span>
-                                                <span className="text-gray-500">{a.date}</span>
-                                                <span className="cursor-pointer text-gray-300 hover:text-red-400 ml-1 font-black" onClick={()=>setAdjustments(adjustments.filter(x=>x.date!==a.date))}>×</span>
+
+                                <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6">
+                                    <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-gray-800">
+                                        <Icon name="plus" /> 特殊調課
+                                    </h3>
+                                    <div className="space-y-3">
+                                        <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} className="w-full p-3 text-sm bg-gray-50 border-gray-200 rounded-2xl focus:ring-2 ring-indigo-500 outline-none" />
+                                        <div className="flex gap-2">
+                                            <select value={newType} onChange={e => setNewType(e.target.value)} className="flex-1 p-3 text-sm bg-gray-50 border-gray-200 rounded-2xl font-bold cursor-pointer">
+                                                <option value="exclude">停課 / 篩除</option>
+                                                <option value="include">補課 / 加開</option>
+                                            </select>
+                                            <button onClick={() => { if(newDate) { setAdjustments([...adjustments, {date:newDate, type:newType}]); setNewDate(''); } }} className="bg-indigo-600 text-white p-3 px-5 rounded-2xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-100">
+                                                <Icon name="plus" />
+                                            </button>
+                                        </div>
+                                        {adjustments.length > 0 && (
+                                            <div className="flex flex-wrap gap-2 pt-2">
+                                                {adjustments.map(adj => (
+                                                    <div key={adj.date} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-black border ${adj.type === 'exclude' ? 'bg-red-50 border-red-100 text-red-500' : 'bg-emerald-50 border-emerald-100 text-emerald-600'}`}>
+                                                        {adj.type === 'exclude' ? '停' : '加'}:{adj.date}
+                                                        <span className="cursor-pointer opacity-50 hover:opacity-100" onClick={() => setAdjustments(adjustments.filter(a => a.date !== adj.date))}>
+                                                            <Icon name="trash" />
+                                                        </span>
+                                                    </div>
+                                                ))}
                                             </div>
-                                        ))}
+                                        )}
                                     </div>
                                 </div>
 
-                                <button onClick={handleCalculate} className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 active:scale-[0.98] transition-all flex items-center justify-center gap-2">
-                                    <lucide-icon name="search" size="18"></lucide-icon> 開始查詢日期
+                                <button 
+                                    onClick={handleCalculate}
+                                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-5 rounded-3xl text-xl font-black flex items-center justify-center gap-3 shadow-xl shadow-indigo-100 transition-all active:scale-[0.98]"
+                                >
+                                    <Icon name="search" /> 開始查詢
                                 </button>
                             </div>
 
-                            <div className="lg:col-span-8 space-y-6">
+                            {/* Results (Right) */}
+                            <div className="lg:col-span-8 space-y-8">
                                 {results ? (
                                     <>
-                                        <div className="bg-indigo-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden">
-                                            <div className="flex justify-between items-center mb-6 relative z-10">
-                                                <h2 className="text-xl font-bold flex items-center gap-2">每月堂數統計</h2>
-                                                <span className="text-sm bg-white/10 px-3 py-1 rounded-lg border border-white/20 font-bold">共 {results.dates.length} 堂</span>
+                                        {/* Monthly Stats */}
+                                        <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-2xl relative overflow-hidden">
+                                            <div className="flex items-center justify-between mb-8 relative z-10">
+                                                <h2 className="text-2xl font-black flex items-center gap-3">
+                                                    每月堂數分佈
+                                                </h2>
+                                                <span className="bg-indigo-500/30 px-4 py-1.5 rounded-2xl text-sm font-black border border-indigo-400/30">
+                                                    共 {results.dates.length} 堂課
+                                                </span>
                                             </div>
+                                            
                                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 relative z-10">
-                                                {Object.entries(results.stats).sort((a,b)=>a[0]-b[0]).map(([m, c]) => (
-                                                    <div key={m} className="bg-white/10 backdrop-blur-md rounded-2xl p-4 text-center border border-white/10">
-                                                        <p className="text-xs text-indigo-300 mb-1 font-bold">{m} 月</p>
-                                                        <p className="text-3xl font-black tracking-tight">{c} <span className="text-xs font-normal opacity-50 ml-0.5">堂</span></p>
+                                                {Object.entries(results.stats).sort((a,b) => a[0]-b[0]).map(([month, count]) => (
+                                                    <div key={month} className="bg-white/5 backdrop-blur-xl rounded-3xl p-5 text-center border border-white/10">
+                                                        <p className="text-xs font-bold text-indigo-300 mb-2 uppercase tracking-tighter">{month} 月份</p>
+                                                        <p className="text-4xl font-black">{count}</p>
+                                                        <p className="text-[10px] opacity-40 font-bold mt-1 tracking-widest">CLASSES</p>
                                                     </div>
                                                 ))}
                                             </div>
                                         </div>
-                                        <div className="bg-white rounded-3xl border shadow-sm overflow-hidden">
-                                            <div className="p-5 bg-gray-50 font-bold border-b text-gray-700 flex justify-between items-center">
-                                                <span>詳細清單</span>
-                                                <span className="text-[10px] text-gray-400 uppercase tracking-widest">Schedule Details</span>
+
+                                        {/* List */}
+                                        <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
+                                            <div className="p-6 border-b border-gray-50 flex items-center justify-between bg-gray-50/30">
+                                                <h3 className="font-black text-gray-800 flex items-center gap-2">
+                                                    <Icon name="list" /> 詳細課表清單
+                                                </h3>
                                             </div>
-                                            <div className="max-h-[500px] overflow-y-auto divide-y divide-gray-50">
+                                            <div className="divide-y divide-gray-50 max-h-[600px] overflow-y-auto custom-scrollbar">
                                                 {results.dates.map((item, idx) => {
                                                     const d = new Date(item.date);
+                                                    const isWeekend = d.getDay() === 0 || d.getDay() === 6;
                                                     return (
-                                                        <div key={item.date} className="p-4 sm:px-6 flex justify-between items-center hover:bg-indigo-50/30 transition-colors group">
-                                                            <div className="flex items-center gap-5">
-                                                                <span className="text-sm font-mono font-bold text-gray-200 group-hover:text-indigo-200 transition-colors">{(idx+1).toString().padStart(2,'0')}</span>
+                                                        <div key={idx} className="px-8 py-5 flex items-center justify-between hover:bg-indigo-50/30 transition-colors group">
+                                                            <div className="flex items-center gap-6">
+                                                                <span className="text-sm font-black text-gray-200 group-hover:text-indigo-200 transition-colors">
+                                                                    {(idx+1).toString().padStart(2, '0')}
+                                                                </span>
                                                                 <div>
-                                                                    <p className="font-bold text-gray-800">{item.date}</p>
-                                                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${d.getDay()===0||d.getDay()===6?'bg-red-50 text-red-400':'bg-gray-100 text-gray-400'}`}>
-                                                                        週{WEEKDAY_NAMES[d.getDay()]}
-                                                                    </span>
+                                                                    <p className="text-xl font-black text-gray-800">{item.date}</p>
+                                                                    <div className="flex items-center gap-3 mt-1">
+                                                                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-lg uppercase ${isWeekend ? 'bg-red-50 text-red-500' : 'bg-gray-100 text-gray-400'}`}>
+                                                                            星期{WEEKDAY_NAMES[d.getDay()]}
+                                                                        </span>
+                                                                        {item.note && (
+                                                                            <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg flex items-center gap-1">
+                                                                                ★ {item.note}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
                                                                 </div>
                                                             </div>
-                                                            {item.note && (
-                                                                <span className="text-[10px] bg-green-50 text-green-600 px-2 py-1 rounded-full font-black border border-green-100">
-                                                                    {item.note}
-                                                                </span>
-                                                            )}
+                                                            <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                <div className="w-2 h-2 rounded-full bg-indigo-400"></div>
+                                                            </div>
                                                         </div>
                                                     );
                                                 })}
@@ -202,32 +269,29 @@
                                         </div>
                                     </>
                                 ) : (
-                                    <div className="h-full min-h-[400px] border-2 border-dashed border-gray-100 rounded-3xl flex flex-col items-center justify-center text-gray-300 bg-white">
-                                        <div className="p-6 bg-gray-50 rounded-full mb-4">
-                                            <i data-lucide="calendar-search" className="w-12 h-12 opacity-20"></i>
-                                        </div>
-                                        <p className="font-bold italic">請設定條件後開始查詢日期</p>
+                                    <div className="h-full min-h-[400px] flex flex-col items-center justify-center bg-white rounded-[3rem] border-4 border-dashed border-gray-100 text-gray-300">
+                                        <Icon name="calendar" />
+                                        <p className="mt-4 font-bold italic">請設定條件後點擊開始查詢</p>
                                     </div>
                                 )}
                             </div>
                         </div>
 
-                        <footer className="mt-10 mb-8 text-center">
-                            <div className="inline-flex items-center gap-2 bg-amber-50 text-amber-700 px-5 py-2.5 rounded-full text-xs font-bold border border-amber-100 shadow-sm">
-                                <i data-lucide="alert-circle" className="w-4 h-4"></i>
-                                2026年二月排除春節與228補假，週三五上課預計為 5 堂。
+                        <footer className="mt-16 mb-10 text-center">
+                            <div className="inline-flex items-center gap-3 bg-white px-6 py-3 rounded-2xl border border-gray-100 shadow-sm text-xs font-bold text-gray-400">
+                                <span>2026 Course Scheduler</span>
+                                <span className="w-1 h-1 rounded-full bg-gray-200"></span>
+                                <span>自適應進階版</span>
                             </div>
                         </footer>
+
                     </div>
                 </div>
             );
-        }
+        };
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
-
-        // 初始化圖標
-        setTimeout(() => lucide.createIcons(), 500);
     </script>
 </body>
 </html>
