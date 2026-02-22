@@ -6,10 +6,10 @@
     <title>2026 課堂查詢 (自適應版)</title>
     <!-- 使用 Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- 載入 React & Babel -->
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- 載入 React & Babel (穩定版本) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
         body { font-family: 'Noto Sans TC', sans-serif; background-color: #f9fafb; }
@@ -43,7 +43,7 @@
             return `${y}-${m}-${d}`;
         };
 
-        // 簡單的圖標組件 (代替 Lucide)
+        // 簡單的圖標組件
         const Icon = ({ name }) => {
             const icons = {
                 calendar: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
@@ -68,37 +68,50 @@
             const [results, setResults] = useState(null);
 
             const handleCalculate = () => {
-                const dates = [];
-                const holidaySet = new Set(HOLIDAYS_2026);
-                let current = new Date(2026, startMonth - 1, 1);
-                const endLimit = new Date(2026, endMonth, 0); // 結束月份的最後一天
+                try {
+                    const dates = [];
+                    const holidaySet = new Set(HOLIDAYS_2026);
+                    const sMonth = parseInt(startMonth, 10);
+                    const eMonth = parseInt(endMonth, 10);
+                    const tClasses = parseInt(totalClasses, 10) || 0;
 
-                // 核心邏輯：在時間限制內找滿總堂數
-                while (dates.length < totalClasses && current <= endLimit) {
-                    const dateStr = formatDate(current);
-                    const dayOfWeek = current.getDay();
+                    let current = new Date(2026, sMonth - 1, 1);
+                    const endLimit = new Date(2026, eMonth, 0); // 結束月份的最後一天
 
-                    const manualAdj = adjustments.find(a => a.date === dateStr);
-                    
-                    if (manualAdj) {
-                        if (manualAdj.type === 'include') {
-                            dates.push({ date: dateStr, type: 'manual', note: '手動加課' });
+                    let safetyCounter = 0;
+                    const maxDays = 500; // 安全機制：防止搜尋範圍過大導致白畫面
+
+                    while (dates.length < tClasses && current <= endLimit && safetyCounter < maxDays) {
+                        safetyCounter++;
+                        const dateStr = formatDate(current);
+                        const dayOfWeek = current.getDay();
+
+                        const manualAdj = adjustments.find(a => a.date === dateStr);
+                        
+                        if (manualAdj) {
+                            if (manualAdj.type === 'include') {
+                                dates.push({ date: dateStr, type: 'manual', note: '手動加課' });
+                            }
+                            // 如果是 exclude，則直接跳過
+                        } else if (selectedDays.includes(dayOfWeek) && !holidaySet.has(dateStr)) {
+                            dates.push({ date: dateStr, type: 'regular', note: '' });
                         }
-                        // 如果是 exclude，則直接跳過不加入 dates
-                    } else if (selectedDays.includes(dayOfWeek) && !holidaySet.has(dateStr)) {
-                        dates.push({ date: dateStr, type: 'regular', note: '' });
+                        
+                        current.setDate(current.getDate() + 1);
                     }
-                    current.setDate(current.getDate() + 1);
+
+                    const stats = {};
+                    dates.forEach(d => {
+                        const m = parseInt(d.date.split('-')[1], 10);
+                        stats[m] = (stats[m] || 0) + 1;
+                    });
+
+                    setResults({ dates, stats });
+                } catch (error) {
+                    console.error("Calculation Error:", error);
+                    // 防止崩潰，回傳空結果
+                    setResults({ dates: [], stats: {} });
                 }
-
-                // 統計每月堂數
-                const stats = {};
-                dates.forEach(d => {
-                    const month = parseInt(d.date.split('-')[1], 10);
-                    stats[month] = (stats[month] || 0) + 1;
-                });
-
-                setResults({ dates, stats });
             };
 
             return (
@@ -130,13 +143,13 @@
                                         <div className="grid grid-cols-2 gap-4">
                                             <div className="space-y-2">
                                                 <label className="text-xs font-black text-gray-400 uppercase tracking-widest">開始月份</label>
-                                                <select value={startMonth} onChange={e => setStartMonth(Number(e.target.value))} className="w-full bg-gray-50 border-gray-200 rounded-2xl p-3 text-sm font-bold focus:ring-2 ring-indigo-500 outline-none cursor-pointer">
+                                                <select value={startMonth} onChange={e => setStartMonth(e.target.value)} className="w-full bg-gray-50 border-gray-200 rounded-2xl p-3 text-sm font-bold focus:ring-2 ring-indigo-500 outline-none cursor-pointer">
                                                     {Array.from({length:12}, (_,i) => <option key={i+1} value={i+1}>{i+1} 月</option>)}
                                                 </select>
                                             </div>
                                             <div className="space-y-2">
                                                 <label className="text-xs font-black text-gray-400 uppercase tracking-widest">結束月份</label>
-                                                <select value={endMonth} onChange={e => setEndMonth(Number(e.target.value))} className="w-full bg-gray-50 border-gray-200 rounded-2xl p-3 text-sm font-bold focus:ring-2 ring-indigo-500 outline-none cursor-pointer">
+                                                <select value={endMonth} onChange={e => setEndMonth(e.target.value)} className="w-full bg-gray-50 border-gray-200 rounded-2xl p-3 text-sm font-bold focus:ring-2 ring-indigo-500 outline-none cursor-pointer">
                                                     {Array.from({length:12}, (_,i) => <option key={i+1} value={i+1}>{i+1} 月</option>)}
                                                 </select>
                                             </div>
@@ -144,7 +157,7 @@
 
                                         <div className="space-y-2">
                                             <label className="text-xs font-black text-gray-400 uppercase tracking-widest">總課堂數</label>
-                                            <input type="number" value={totalClasses} onChange={e => setTotalClasses(Number(e.target.value))} className="w-full bg-gray-50 border-gray-200 rounded-2xl p-3 text-2xl font-black text-indigo-600 focus:ring-2 ring-indigo-500 outline-none" />
+                                            <input type="number" value={totalClasses} onChange={e => setTotalClasses(e.target.value)} className="w-full bg-gray-50 border-gray-200 rounded-2xl p-3 text-2xl font-black text-indigo-600 focus:ring-2 ring-indigo-500 outline-none" />
                                         </div>
 
                                         <div className="space-y-3">
