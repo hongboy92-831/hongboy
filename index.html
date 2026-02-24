@@ -3,11 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>2026 課堂查詢 (自適應版)</title>
+    <title>2026 課堂查詢 (精確日期版)</title>
     <!-- 使用 Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 載入 React & Babel (穩定版本) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/0.1.0/react-dom.production.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
     <style>
@@ -57,8 +58,9 @@
         };
 
         const App = () => {
-            const [startMonth, setStartMonth] = useState(2);
-            const [endMonth, setEndMonth] = useState(6);
+            // 改為精確的日期選擇，預設範圍為 2026/02/01 ~ 2026/06/30
+            const [startDate, setStartDate] = useState('2026-02-01');
+            const [endDate, setEndDate] = useState('2026-06-30');
             const [totalClasses, setTotalClasses] = useState(18);
             const [selectedDays, setSelectedDays] = useState([3, 5]);
             const [adjustments, setAdjustments] = useState([]);
@@ -71,12 +73,16 @@
                 try {
                     const dates = [];
                     const holidaySet = new Set(HOLIDAYS_2026);
-                    const sMonth = parseInt(startMonth, 10);
-                    const eMonth = parseInt(endMonth, 10);
                     const tClasses = parseInt(totalClasses, 10) || 0;
 
-                    let current = new Date(2026, sMonth - 1, 1);
-                    const endLimit = new Date(2026, eMonth, 0); // 結束月份的最後一天
+                    let current = new Date(startDate);
+                    const endLimit = new Date(endDate);
+
+                    // 驗證日期合法性
+                    if (isNaN(current.getTime()) || isNaN(endLimit.getTime())) {
+                        alert("請選擇正確的開始與結束日期");
+                        return;
+                    }
 
                     let safetyCounter = 0;
                     const maxDays = 500; // 安全機制：防止搜尋範圍過大導致白畫面
@@ -109,20 +115,19 @@
                     setResults({ dates, stats });
                 } catch (error) {
                     console.error("Calculation Error:", error);
-                    // 防止崩潰，回傳空結果
                     setResults({ dates: [], stats: {} });
                 }
             };
 
             return (
                 <div className="min-h-screen p-4 sm:p-6 lg:p-10">
-                    <div className="max-w-6xl mx-auto">
+                    <div className="max-w-6xl mx-auto pb-10">
                         
                         {/* Header */}
                         <header className="mb-10 flex flex-col md:flex-row md:items-end md:justify-between gap-4 border-b pb-6 border-gray-200">
                             <div>
                                 <h1 className="text-4xl font-black text-indigo-800 tracking-tight">2026 課堂查詢</h1>
-                                <p className="text-gray-500 mt-2 font-medium">智慧排除國定假日，自動統計每月堂數</p>
+                                <p className="text-gray-500 mt-2 font-medium">指定日期區間，自動計算課堂日期</p>
                             </div>
                             <div className="flex items-center gap-2 text-xs font-bold text-emerald-600 bg-emerald-50 px-4 py-2 rounded-full border border-emerald-100">
                                 <Icon name="check" />
@@ -140,18 +145,24 @@
                                     </h3>
                                     
                                     <div className="space-y-6">
-                                        <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-4">
                                             <div className="space-y-2">
-                                                <label className="text-xs font-black text-gray-400 uppercase tracking-widest">開始月份</label>
-                                                <select value={startMonth} onChange={e => setStartMonth(e.target.value)} className="w-full bg-gray-50 border-gray-200 rounded-2xl p-3 text-sm font-bold focus:ring-2 ring-indigo-500 outline-none cursor-pointer">
-                                                    {Array.from({length:12}, (_,i) => <option key={i+1} value={i+1}>{i+1} 月</option>)}
-                                                </select>
+                                                <label className="text-xs font-black text-gray-400 uppercase tracking-widest">開始日期</label>
+                                                <input 
+                                                    type="date" 
+                                                    value={startDate} 
+                                                    onChange={e => setStartDate(e.target.value)} 
+                                                    className="w-full bg-gray-50 border-gray-200 rounded-2xl p-3 text-sm font-bold focus:ring-2 ring-indigo-500 outline-none cursor-pointer"
+                                                />
                                             </div>
                                             <div className="space-y-2">
-                                                <label className="text-xs font-black text-gray-400 uppercase tracking-widest">結束月份</label>
-                                                <select value={endMonth} onChange={e => setEndMonth(e.target.value)} className="w-full bg-gray-50 border-gray-200 rounded-2xl p-3 text-sm font-bold focus:ring-2 ring-indigo-500 outline-none cursor-pointer">
-                                                    {Array.from({length:12}, (_,i) => <option key={i+1} value={i+1}>{i+1} 月</option>)}
-                                                </select>
+                                                <label className="text-xs font-black text-gray-400 uppercase tracking-widest">結束日期</label>
+                                                <input 
+                                                    type="date" 
+                                                    value={endDate} 
+                                                    onChange={e => setEndDate(e.target.value)} 
+                                                    className="w-full bg-gray-50 border-gray-200 rounded-2xl p-3 text-sm font-bold focus:ring-2 ring-indigo-500 outline-none cursor-pointer"
+                                                />
                                             </div>
                                         </div>
 
@@ -289,14 +300,6 @@
                                 )}
                             </div>
                         </div>
-
-                        <footer className="mt-16 mb-10 text-center">
-                            <div className="inline-flex items-center gap-3 bg-white px-6 py-3 rounded-2xl border border-gray-100 shadow-sm text-xs font-bold text-gray-400">
-                                <span>2026 Course Scheduler</span>
-                                <span className="w-1 h-1 rounded-full bg-gray-200"></span>
-                                <span>自適應進階版</span>
-                            </div>
-                        </footer>
 
                     </div>
                 </div>
